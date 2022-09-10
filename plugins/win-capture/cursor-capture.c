@@ -107,13 +107,19 @@ static inline uint8_t *copy_from_mask(ICONINFO *ii, uint32_t *width,
 	bottom = bmp.bmWidthBytes * bmp.bmHeight;
 
 	for (long i = 0; i < pixels; i++) {
-		uint8_t alpha = bit_to_alpha(mask, i, true);
+		uint8_t andMask = bit_to_alpha(mask, i, true);
 		uint8_t color = bit_to_alpha(mask + bottom, i, true);
 
-		if (!alpha) {
-			*(uint32_t *)&output[i * 4] = 0xFF000000;
+		if (!andMask) {
+			// black in the AND mask
+			*(uint32_t *)&output[i * 4] =
+				!!color ? 0x00FFFFFF /*always white*/
+					: 0xFF000000 /*always black*/;
 		} else {
-			*(uint32_t *)&output[i * 4] = !!color ? 0xFFFFFFFF : 0;
+			// white in the AND mask
+			*(uint32_t *)&output[i * 4] =
+				!!color ? 0xFFFFFFFF /*source inverted*/
+					: 0 /*transparent*/;
 		}
 	}
 
@@ -234,8 +240,10 @@ void cursor_draw(struct cursor_data *data, long x_offset, long y_offset,
 
 		auto blendMode = data->monochrome ? GS_BLEND_INVDSTCOLOR
 						  : GS_BLEND_SRCALPHA;
-		gs_blend_function_separate(blendMode, GS_BLEND_INVSRCALPHA,
-					   GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+		gs_blend_function_separate(blendMode, /*src_color*/
+					   GS_BLEND_INVSRCALPHA /*dest_color*/,
+					   GS_BLEND_ONE /*src_alpha*/,
+					   GS_BLEND_INVSRCALPHA /*dest_alpha*/);
 
 		gs_matrix_push();
 		obs_source_draw(data->texture, x_draw, y_draw, 0, 0, false);
